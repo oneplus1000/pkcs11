@@ -22,13 +22,14 @@ This test supports the following environment variables:
 * SOFTHSM_PRIVKEYLABEL
 * SOFTHSM_PIN
 */
+var lib = "C:\\SoftHSM2\\lib\\softhsm2-x64.dll"
 
 func setenv(t *testing.T) *Ctx {
-	lib := "/usr/lib/softhsm/libsofthsm.so"
-	if x := os.Getenv("SOFTHSM_LIB"); x != "" {
+	//lib := "/usr/lib/softhsm/libsofthsm.so"
+	/*if x := os.Getenv("SOFTHSM_LIB"); x != "" {
 		lib = x
 	}
-	t.Logf("loading %s", lib)
+	t.Logf("loading %s", lib)*/
 	p := New(lib)
 	if p == nil {
 		t.Fatal("Failed to init lib")
@@ -40,7 +41,7 @@ func TestSetenv(t *testing.T) {
 	wd, _ := os.Getwd()
 	os.Setenv("SOFTHSM_CONF", wd+"/softhsm.conf")
 
-	lib := "/usr/lib/softhsm/libsofthsm.so"
+	//lib := "/usr/lib/softhsm/libsofthsm.so"
 	if x := os.Getenv("SOFTHSM_LIB"); x != "" {
 		lib = x
 	}
@@ -75,8 +76,15 @@ func TestInitialize(t *testing.T) {
 	if e := p.Initialize(); e != nil {
 		t.Fatalf("init error %s\n", e)
 	}
-	p.Finalize()
-	p.Destroy()
+
+	slots, e := p.GetSlotList(true)
+	if e != nil {
+		t.Fatalf("slots %s\n", e)
+	}
+	_ = slots
+	//fmt.Printf("%+v", slots)
+	//p.Finalize()
+	//p.Destroy()
 }
 
 func TestNew(t *testing.T) {
