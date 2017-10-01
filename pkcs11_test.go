@@ -180,6 +180,7 @@ func TestGetAttributeValue(t *testing.T) {
 		NewAttribute(CKA_MODULUS, nil),
 		NewAttribute(CKA_LABEL, nil),
 	}
+	
 	attr, err := p.GetAttributeValue(session, ObjectHandle(pbk), template)
 	if err != nil {
 		t.Fatalf("err %s\n", err)

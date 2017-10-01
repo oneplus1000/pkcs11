@@ -294,11 +294,11 @@ CK_RV GetAttributeValue(struct ctx * c, CK_SESSION_HANDLE session,
 	}
 	CK_ULONG i;
 	for (i = 0; i < templen; i++) {
-		if ((CK_LONG) temp[i].ulValueLen == -1) {
+		if ((CK_LONG) tempc[i].ulValueLen == -1) {
 			// either access denied or no such object
 			continue;
 		}
-		temp[i].pValue = calloc(temp[i].ulValueLen, sizeof(CK_BYTE));
+		tempc[i].pValue = calloc(tempc[i].ulValueLen, sizeof(CK_BYTE));
 	}
 	e = fun(session, object, tempc, templen);
 	ATTR_FROM_C(temp, tempc, templen);
@@ -842,7 +842,9 @@ void mechToC(CK_MECHANISM_PTR mechOut, ckMechPtr mechIn) {
 import "C"
 import "strings"
 
-import "unsafe"
+import (
+	"unsafe" 
+)
 
 // Ctx contains the current pkcs11 context.
 type Ctx struct {
@@ -1153,15 +1155,19 @@ func (c *Ctx) GetAttributeValue(sh SessionHandle, o ObjectHandle, a []*Attribute
 	for i := 0; i < len(a); i++ {
 		pa[i]._type = C.CK_ATTRIBUTE_TYPE(a[i].Type)
 	}
+	//fmt.Printf("AAAAA")
 	e := C.GetAttributeValue(c.ctx, C.CK_SESSION_HANDLE(sh), C.CK_OBJECT_HANDLE(o), C.ckAttrPtr(&pa[0]), C.CK_ULONG(len(a)))
 	if toError(e) != nil {
 		return nil, toError(e)
 	}
+	//fmt.Printf("BBBB")
 	a1 := make([]*Attribute, len(a))
 	for i, c := range pa {
+		//fmt.Printf("ccccc%d",i)
 		x := new(Attribute)
 		x.Type = uint(c._type)
 		if int(c.ulValueLen) != -1 {
+			//fmt.Printf("ddddd%+v",c)
 			x.Value = C.GoBytes(unsafe.Pointer(c.pValue), C.int(c.ulValueLen))
 			C.free(unsafe.Pointer(c.pValue))
 		}
