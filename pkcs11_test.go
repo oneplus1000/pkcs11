@@ -71,20 +71,44 @@ func getSession(p *Ctx, t *testing.T) SessionHandle {
 	return session
 }
 
+
+func TestWin(t *testing.T) {
+	p := setenv(t)
+	session := getSession(p, t) 
+	defer finishSession(p, session)
+
+	template := []*Attribute{}
+	if e := p.FindObjectsInit(session, template); e != nil {
+		t.Fatalf("failed to init: %s\n", e)
+	}
+	objs, b, e := p.FindObjects(session, 3)
+	if e != nil {
+		t.Fatalf("failed to find: %s %v\n", e, b)
+	}
+	fmt.Printf("objs=%+v\n",objs)
+
+	//for _,obj := range objs {
+	temp := []*Attribute{
+		NewAttribute(CKA_VALUE,nil),
+	}
+	attr, err := p.GetAttributeValue(session, objs[0], temp)
+	if err != nil {
+		t.Fatalf("err %s\n", err)
+	}
+	fmt.Printf("attr=%+v\n",attr)
+	//}
+
+	p.Finalize()
+	p.Destroy()
+}
+
 func TestInitialize(t *testing.T) {
 	p := setenv(t)
 	if e := p.Initialize(); e != nil {
 		t.Fatalf("init error %s\n", e)
 	}
-
-	slots, e := p.GetSlotList(true)
-	if e != nil {
-		t.Fatalf("slots %s\n", e)
-	}
-	_ = slots
-	//fmt.Printf("%+v", slots)
-	//p.Finalize()
-	//p.Destroy()
+	p.Finalize()
+	p.Destroy()
 }
 
 func TestNew(t *testing.T) {
