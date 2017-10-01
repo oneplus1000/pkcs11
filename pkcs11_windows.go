@@ -14,12 +14,7 @@ package pkcs11
 
 /*
 #cgo windows CFLAGS: -DREPACK_STRUCTURES
-#cgo windows LDFLAGS: -Wl,--no-as-needed  
-#define CK_PTR *
-#define CK_DEFINE_FUNCTION(returnType, name) returnType name
-#define CK_DECLARE_FUNCTION(returnType, name) returnType name
-#define CK_DECLARE_FUNCTION_POINTER(returnType, name) returnType (* name)
-#define CK_CALLBACK_FUNCTION(returnType, name) returnType (* name)
+#cgo windows LDFLAGS: -Wl,--no-as-needed   
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -73,12 +68,15 @@ void Destroy(struct ctx *c)
 	free(c);
 }
 
-CK_RV Initialize(struct ctx * c, CK_VOID_PTR initArgs)
+CK_RV Initialize(struct ctx * c)
 {	
 	//printf("---------------->A %d\n",c->sym);
 	//return  c->sym->C_Initialize(initArgs); 
 	CK_C_Initialize init = (CK_C_Initialize) GetProcAddress(c->handle, "C_Initialize");
-	return init(initArgs);
+	CK_C_INITIALIZE_ARGS args;
+ 	memset(&args, 0, sizeof(args));
+ 	args.flags = CKF_OS_LOCKING_OK;
+	return init(&args);
 }
 
 CK_RV Finalize(struct ctx * c)
@@ -87,9 +85,19 @@ CK_RV Finalize(struct ctx * c)
 	return fun(NULL);
 }
 
-CK_RV GetInfo(struct ctx * c, CK_INFO_PTR info)
+CK_RV GetInfo(struct ctx * c, ckInfoPtr info)
 {
-	return c->sym->C_GetInfo(info);
+	CK_INFO p;
+	CK_RV e = c->sym->C_GetInfo(&p);
+	if (e != CKR_OK) {
+		return e;
+	}
+	info->cryptokiVersion = p.cryptokiVersion;
+	memcpy(info->manufacturerID, p.manufacturerID, sizeof(p.manufacturerID));
+	info->flags = p.flags;
+	memcpy(info->libraryDescription, p.libraryDescription, sizeof(p.libraryDescription));
+	info->libraryVersion = p.libraryVersion;
+	return e;
 }
 
 CK_RV GetSlotList(struct ctx * c, CK_BBOOL tokenPresent,
@@ -605,7 +613,9 @@ CK_RV VerifyFinal(struct ctx * c, CK_SESSION_HANDLE session, CK_BYTE_PTR sig,
 CK_RV VerifyRecoverInit(struct ctx * c, CK_SESSION_HANDLE session,
 			ckMechPtr mech, CK_OBJECT_HANDLE key)
 {
-	CK_RV rv = c->sym->C_VerifyRecoverInit(session, mech, key);
+	CK_C_VerifyRecoverInit fun = (CK_C_VerifyRecoverInit) GetProcAddress(c->handle, "C_VerifyRecoverInit");
+	MECH_TO_C(m, mech);
+	CK_RV rv = fun(session, m, key);
 	return rv;
 }
 
@@ -701,8 +711,12 @@ CK_RV GenerateKey(struct ctx * c, CK_SESSION_HANDLE session,
 		  ckMechPtr mechanism, ckAttrPtr temp,
 		  CK_ULONG tempCount, CK_OBJECT_HANDLE_PTR key)
 {
+	CK_C_GenerateKey fun = (CK_C_GenerateKey) GetProcAddress(c->handle, "C_GenerateKey");
+	MECH_TO_C(m, mechanism);
+	ATTR_TO_C(tempc, temp, tempCount, NULL);
 	CK_RV e =
-	    c->sym->C_GenerateKey(session, mechanism, temp, tempCount, key);
+		fun(session, m, tempc, tempCount, key);
+	ATTR_FREE(tempc);
 	return e;
 }
 
@@ -713,10 +727,15 @@ CK_RV GenerateKeyPair(struct ctx * c, CK_SESSION_HANDLE session,
 		      CK_OBJECT_HANDLE_PTR privkey)
 {
 	CK_C_GenerateKeyPair fun = (CK_C_GenerateKeyPair) GetProcAddress(c->handle, "C_GenerateKeyPair");
+	MECH_TO_C(m, mechanism);
+ 	ATTR_TO_C(pubc, pub, pubCount, NULL);
+ 	ATTR_TO_C(privc, priv, privCount, pubc);
 	CK_RV e =
-	    fun(session, mechanism, pub, pubCount, priv,
+	    fun(session, m, pubc, pubCount, privc,
 				      privCount,
-				      pubkey, privkey);
+					  pubkey, privkey);
+	ATTR_FREE(pubc);
+ 	ATTR_FREE(privc);
 	return e;
 }
 
@@ -725,7 +744,9 @@ CK_RV WrapKey(struct ctx * c, CK_SESSION_HANDLE session,
 	      CK_OBJECT_HANDLE key, CK_BYTE_PTR * wrapped,
 	      CK_ULONG_PTR wrappedlen)
 {
-	CK_RV rv = c->sym->C_WrapKey(session, mechanism, wrappingkey, key, NULL,
+	CK_C_WrapKey fun = (CK_C_WrapKey) GetProcAddress(c->handle, "C_WrapKey");
+	MECH_TO_C(m, mechanism);
+	CK_RV rv = fun(session, m, wrappingkey, key, NULL,
 				     wrappedlen);
 	if (rv != CKR_OK) {
 		return rv;
@@ -734,7 +755,7 @@ CK_RV WrapKey(struct ctx * c, CK_SESSION_HANDLE session,
 	if (*wrapped == NULL) {
 		return CKR_HOST_MEMORY;
 	}
-	rv = c->sym->C_WrapKey(session, mechanism, wrappingkey, key, *wrapped,
+	rv = fun(session, m, wrappingkey, key, *wrapped,
 			       wrappedlen);
 	return rv;
 }
@@ -743,7 +764,11 @@ CK_RV DeriveKey(struct ctx * c, CK_SESSION_HANDLE session,
 		ckMechPtr mech, CK_OBJECT_HANDLE basekey,
 		ckAttrPtr a, CK_ULONG alen, CK_OBJECT_HANDLE_PTR key)
 {
-	CK_RV e = c->sym->C_DeriveKey(session, mech, basekey, a, alen, key);
+	CK_C_DeriveKey fun = (CK_C_DeriveKey) GetProcAddress(c->handle, "C_DeriveKey");
+	MECH_TO_C(m, mech);
+ 	ATTR_TO_C(tempc, a, alen, NULL);
+	CK_RV e = fun(session, m, basekey, tempc, alen, key);
+	ATTR_FREE(tempc);
 	return e;
 }
 
@@ -752,8 +777,12 @@ CK_RV UnwrapKey(struct ctx * c, CK_SESSION_HANDLE session,
 		CK_BYTE_PTR wrappedkey, CK_ULONG wrappedkeylen,
 		ckAttrPtr a, CK_ULONG alen, CK_OBJECT_HANDLE_PTR key)
 {
-	CK_RV e = c->sym->C_UnwrapKey(session, mech, unwrappingkey, wrappedkey,
-				      wrappedkeylen, a, alen, key);
+	CK_C_UnwrapKey fun = (CK_C_UnwrapKey) GetProcAddress(c->handle, "C_UnwrapKey");
+	MECH_TO_C(m, mech);
+ 	ATTR_TO_C(tempc, a, alen, NULL);
+	CK_RV e = fun(session, m, unwrappingkey, wrappedkey,
+					  wrappedkeylen, tempc, alen, key);
+	ATTR_FREE(tempc);
 	return e;
 }
 
@@ -781,6 +810,34 @@ CK_RV WaitForSlotEvent(struct ctx * c, CK_FLAGS flags, CK_ULONG_PTR slot)
 	    c->sym->C_WaitForSlotEvent(flags, (CK_SLOT_ID_PTR) slot, NULL);
 	return e;
 }
+
+
+CK_RV attrsToC(CK_ATTRIBUTE_PTR *attrOut, ckAttrPtr attrIn, CK_ULONG count) {
+	CK_ATTRIBUTE_PTR attr = calloc(count, sizeof(CK_ATTRIBUTE));
+	if (attr == NULL) {
+		return CKR_HOST_MEMORY;
+	}
+	for (int i = 0; i < count; i++) {
+		attr[i].type = attrIn[i].type;
+		attr[i].pValue = attrIn[i].pValue;
+		attr[i].ulValueLen = attrIn[i].ulValueLen;
+	}
+	*attrOut = attr;
+	return CKR_OK;
+}
+void attrsFromC(ckAttrPtr attrOut, CK_ATTRIBUTE_PTR attrIn, CK_ULONG count) {
+	for (int i = 0; i < count; i++) {
+		attrOut[i].type = attrIn[i].type;
+		attrOut[i].pValue = attrIn[i].pValue;
+		attrOut[i].ulValueLen = attrIn[i].ulValueLen;
+	}
+}
+void mechToC(CK_MECHANISM_PTR mechOut, ckMechPtr mechIn) {
+	mechOut->mechanism = mechIn->mechanism;
+	mechOut->pParameter = mechIn->pParameter;
+	mechOut->ulParameterLen = mechIn->ulParameterLen;
+}
+
 */
 import "C"
 import "strings"
@@ -820,8 +877,8 @@ func (c *Ctx) Destroy() {
 
 /* Initialize initializes the Cryptoki library. */
 func (c *Ctx) Initialize() error {
-	args := &C.CK_C_INITIALIZE_ARGS{CreateMutexA: nil, DestroyMutex: nil, LockMutex: nil, UnlockMutex: nil, flags: C.CKF_OS_LOCKING_OK, pReserved: nil}
-	e := C.Initialize(c.ctx, C.CK_VOID_PTR(args))
+	//args := &C.CK_C_INITIALIZE_ARGS{CreateMutexA: nil, DestroyMutex: nil, LockMutex: nil, UnlockMutex: nil, flags: C.CKF_OS_LOCKING_OK, pReserved: nil}
+	e := C.Initialize(c.ctx)
 	return toError(e)
 }
 
@@ -836,8 +893,8 @@ func (c *Ctx) Finalize() error {
 
 /* GetInfo returns general information about Cryptoki. */
 func (c *Ctx) GetInfo() (Info, error) {
-	var p C.CK_INFO
-	e := C.GetInfo(c.ctx, C.CK_INFO_PTR(&p))
+	var p C.ckInfo
+	e := C.GetInfo(c.ctx, &p)
 	i := Info{
 		CryptokiVersion:    toVersion(p.cryptokiVersion),
 		ManufacturerID:     strings.TrimRight(string(C.GoBytes(unsafe.Pointer(&p.manufacturerID[0]), 32)), " "),
