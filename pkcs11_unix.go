@@ -1,4 +1,4 @@
-// +build linux
+// +build linux darwin
 
 // Copyright 2013 Miek Gieben. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -39,7 +39,7 @@ struct ctx {
 
 // New initializes a ctx and fills the symbol table.
 struct ctx *New(const char *module)
-{	
+{
 	printf("A0");
 	if (lt_dlinit() != 0) {
 		return NULL;

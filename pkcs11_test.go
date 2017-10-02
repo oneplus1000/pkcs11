@@ -22,7 +22,8 @@ This test supports the following environment variables:
 * SOFTHSM_PRIVKEYLABEL
 * SOFTHSM_PIN
 */
-var lib = "C:\\SoftHSM2\\lib\\softhsm2-x64.dll"
+//var lib = "C:\\SoftHSM2\\lib\\softhsm2-x64.dll"
+var lib = "/usr/local/Cellar/softhsm/2.3.0/lib/softhsm/libsofthsm2.so"
 
 func setenv(t *testing.T) *Ctx {
 	//lib := "/usr/lib/softhsm/libsofthsm.so"
@@ -71,10 +72,9 @@ func getSession(p *Ctx, t *testing.T) SessionHandle {
 	return session
 }
 
-
 func TestWin(t *testing.T) {
 	p := setenv(t)
-	session := getSession(p, t) 
+	session := getSession(p, t)
 	defer finishSession(p, session)
 
 	template := []*Attribute{}
@@ -85,17 +85,17 @@ func TestWin(t *testing.T) {
 	if e != nil {
 		t.Fatalf("failed to find: %s %v\n", e, b)
 	}
-	fmt.Printf("objs=%+v\n",objs)
+	fmt.Printf("objs=%+v\n", objs)
 
 	//for _,obj := range objs {
 	temp := []*Attribute{
-		NewAttribute(CKA_VALUE,nil),
+		NewAttribute(CKA_LABEL, nil),
 	}
 	attr, err := p.GetAttributeValue(session, objs[0], temp)
 	if err != nil {
 		t.Fatalf("err %s\n", err)
 	}
-	fmt.Printf("attr=%+v\n",attr)
+	fmt.Printf("attr=%+v\n", attr)
 	//}
 
 	p.Finalize()
@@ -146,7 +146,7 @@ func TestFindObject(t *testing.T) {
 	session := getSession(p, t)
 	defer finishSession(p, session)
 
-	tokenLabel:= "TestFindObject"
+	tokenLabel := "TestFindObject"
 
 	// There are 2 keys in the db with this tag
 	generateRSAKeyPair(t, p, session, tokenLabel, false)
@@ -165,6 +165,7 @@ func TestFindObject(t *testing.T) {
 	if len(obj) != 2 {
 		t.Fatal("should have found two objects")
 	}
+	//fmt.Printf("obj=%+v\n", obj)
 }
 
 func TestGetAttributeValue(t *testing.T) {
@@ -180,12 +181,14 @@ func TestGetAttributeValue(t *testing.T) {
 		NewAttribute(CKA_MODULUS, nil),
 		NewAttribute(CKA_LABEL, nil),
 	}
-	
+
 	attr, err := p.GetAttributeValue(session, ObjectHandle(pbk), template)
 	if err != nil {
 		t.Fatalf("err %s\n", err)
 	}
 	for i, a := range attr {
+
+		fmt.Printf("attr %d, type %d, valuelen %d\n", i, a.Type, len(a.Value))
 		t.Logf("attr %d, type %d, valuelen %d", i, a.Type, len(a.Value))
 		if a.Type == CKA_MODULUS {
 			mod := big.NewInt(0)
@@ -244,7 +247,6 @@ func TestDigestUpdate(t *testing.T) {
 		t.Fatalf("wrong digest: %s", hex)
 	}
 }
-
 
 /*
 Purpose: Generate RSA keypair with a given name and persistence.
@@ -321,15 +323,15 @@ func TestSign(t *testing.T) {
 }
 
 /* destroyObject
-	Purpose: destroy and object from the HSM
-	Inputs: test handle
-		session handle
-		searchToken: String containing the token label to search for.
-		class: Key type (CKO_PRIVATE_KEY or CKO_PUBLIC_KEY) to remove.
-	Outputs: removes object from HSM
-	Returns: Fatal error on failure.
+Purpose: destroy and object from the HSM
+Inputs: test handle
+	session handle
+	searchToken: String containing the token label to search for.
+	class: Key type (CKO_PRIVATE_KEY or CKO_PUBLIC_KEY) to remove.
+Outputs: removes object from HSM
+Returns: Fatal error on failure.
 */
-func destroyObject(t *testing.T, p *Ctx, session SessionHandle, searchToken string, class uint) (err error){
+func destroyObject(t *testing.T, p *Ctx, session SessionHandle, searchToken string, class uint) (err error) {
 	template := []*Attribute{
 		NewAttribute(CKA_LABEL, searchToken),
 		NewAttribute(CKA_CLASS, class)}
@@ -422,4 +424,5 @@ func ExampleSign() {
 	fmt.Printf("It works!")
 	// Output: It works!
 }
+
 // Copyright 2013 Miek Gieben. All rights reserved.
